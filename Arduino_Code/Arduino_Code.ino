@@ -138,7 +138,7 @@ void ChangeVin(int NewChargeState) { //Enable or disable input voltage present L
 }
 
 void ChangeLoad(int NewLoadState) { //Enable or disable Load
-  if (Debug >= 1) {Serial.print(F("ChangeLoad.NewChargeState is: "));Serial.println(NewChargeState);}
+  if (Debug >= 1) {Serial.print(F("ChangeLoad.NewLoadState is: "));Serial.println(NewLoadState);}
   if (NewLoadState == 1) {
     if (Debug >= 0) Serial.println(F("Load Connected to Battery"));
     Load = true;
