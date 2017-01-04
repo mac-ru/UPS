@@ -20,6 +20,7 @@ int Debug = 0; //Debug output level.
 //Debug 1 -- print everysecond information
 //Debug 2 -- print all information and enable delay
 
+volatile bool InputV = false; //Input is present or not
 volatile bool Charge = false; // Battery Charging or not.
 volatile bool Load = false; // Load Connected or not.
 volatile long ChargeTimer = 0;
@@ -32,8 +33,8 @@ const bool UseCurrentSensor = false; //Use or not Current sensor, connected to p
 const float R1 = 0000; // 33K Resistor at Battery Voltage resistor dividor
 const float R2 = 10000; // 10K Resistor at Battery Voltage resistor dividor
 
-const long ChargeTimerCharge = 2; //How long to charge. Default is 18000
-const long ChargeTimerRecharge = 5; //How often to recharge when on standby. Default is 86400
+const long ChargeTimerCharge = 10; //How long to charge. Default is 18000
+const long ChargeTimerRecharge = 30; //How often to recharge when on standby. Default is 86400
 const long EverySecondTime = 1000000; //How often run Everysecond script in microseconds
 const int delaytimer = 1000;
 
@@ -82,7 +83,7 @@ float readVcc() { //Read VCC voltage, Comparing to 1.1 Internal.
 float ReadBatV() {//Battery voltage test
   int i;
   int tempBatV;
-  Vcc = readVcc();
+//  Vcc = readVcc();
   // Read Analog pin, which connected to resistor divider on battery.
   tempBatV = 0.0;
   for (i = 0; i < MTimes; i++) {
@@ -94,64 +95,64 @@ float ReadBatV() {//Battery voltage test
   float v  = (tempBatV * Vcc) / 1024.0;
   float v2 = v / (R2 / (R1 + R2));
 
-  if (Debug >= 2) {
-    Serial.print("tempBatV: ");
-    Serial.println(tempBatV);
-    Serial.print("v: ");
-    Serial.println(v);
-    Serial.print("Battery Voltage is: ");
+  if (Debug >= 1) {
+    Serial.print("ReadBatV.out.Battery Voltage is: ");
     Serial.println(v2);
     delay(delaytimer);
   }
   return v2;
 }
 
-void ChangeCharge(int NewChargeState) { //Enable or disable battery charging
-  if (Debug >= 1) {Serial.print(F("ChangeCharge.NewChargeState is: "));Serial.println(NewChargeState);}
-  if (NewChargeState == 1) {
+void ChangeCharge(int NewState) { //Enable or disable battery charging
+  if (Debug >= 1) {Serial.print(F("ChangeCharge.NewState is: "));Serial.println(NewState);}
+  if (NewState == 1) {
     if (Debug >= 0) Serial.println(F("Battery charge is enabled "));
     Charge = true;
     digitalWrite(pinBat,HIGH);
     digitalWrite(pinBatLed,HIGH);
-    delay (1);
   } else {
     if (Debug >= 0) Serial.println(F("Battery charge is disabled "));
     Charge = false;
     digitalWrite(pinBat,LOW);
     digitalWrite(pinBatLed,LOW);
-    delay (1);
   }
+  delay (1);
 }
 
-void ChangeVin(int NewChargeState) { //Enable or disable input voltage present LED
+void ChangeVin() { //Enable or disable input voltage present
+  int VinTrigger = 512;
+  if (Debug >= 1) {Serial.println(F("Executing ChangeVin "));delay(delaytimer);}
+  delay(5);
   Vin=analogRead(pinIV); //Check input voltage
-  if (Debug >= 1) {Serial.print(F("ChangeCharge.NewChargeState is: "));Serial.println(NewChargeState);}
-  if (NewChargeState == 1) {
-    if (Debug >= 0) Serial.println(F("Battery charge is enabled "));
-    digitalWrite(pinBatLed,HIGH);
-    delay (1);
-  } else {
-    if (Debug >= 0) Serial.println(F("Battery charge is disabled "));
-    digitalWrite(pinBatLed,LOW);
+
+  if (((!InputV)&&(Vin>=VinTrigger))||((InputV)&&(Vin<VinTrigger))) //If Voltage status change
+  {
+    if (Vin >=VinTrigger) {
+      if (Debug >= 2) {Serial.print(F("ChangeVin.Vin is: "));Serial.println(Vin);delay(delaytimer);}
+      InputV=true;
+      if (Debug >= 0) Serial.println(F("Input voltage normal! "));
+      digitalWrite(pinVinLed,HIGH);
+    } else {
+      InputV=false;
+      if (Debug >= 0) Serial.println(F("No input voltage "));
+      digitalWrite(pinVinLed,LOW);
+    }
     delay (1);
   }
 }
 
-void ChangeLoad(int NewLoadState) { //Enable or disable Load
-  if (Debug >= 1) {Serial.print(F("ChangeLoad.NewLoadState is: "));Serial.println(NewLoadState);}
-  if (NewLoadState == 1) {
+void ChangeLoad(int NewState) { //Enable or disable Load
+  if (Debug >= 2) {Serial.print(F("ChangeLoad.NewState is: "));Serial.println(NewState);}
+  if (NewState == 1) {
     if (Debug >= 0) Serial.println(F("Load Connected to Battery"));
     Load = true;
     digitalWrite(pinLoad,HIGH);
-    digitalWrite(pinVinLed,HIGH);
-    delay (1);
   } else {
     if (Debug >= 0) Serial.println(F("Load Disconnected from Battery"));
     Load = false;
     digitalWrite(pinLoad,LOW);
-    digitalWrite(pinVinLed,LOW );
-    delay (1);
   }
+  delay (1);
 }
 
 
@@ -170,19 +171,23 @@ void setup() {
 
   ChangeLoad(1);
   Load=1;
-  
-  tmp = ReadBatV();
-  BatV = tmp;
-  if (Debug >= 0) {Serial.print(F("Battery Voltage is "));Serial.println(BatV);}
-  if (BatV < VBatMin){
-    if (Debug >= 0) Serial.println(F("To low volage on Boot. Switching to 'Charge Mode'"));
-    ChargeTimer=ChargeTimerCharge;
-    ChangeCharge (1);
-  } else {
-    if (Debug >= 0) Serial.println(F("Voltage on boot is normal. Switching to 'Recharge Mode'"));
-    ChargeTimer=ChargeTimerRecharge;
-    ChangeCharge (0);
 
+  ChangeVin();
+  BatV = ReadBatV();
+  Vcc = readVcc();
+  
+  if (Debug >= 0) {Serial.print(F("Battery Voltage is "));Serial.println(BatV);}
+  if (InputV)
+  {
+    if (BatV < VBatMin){
+      if (Debug >= 0) Serial.println(F("To low volage on Boot. Switching to 'Charge Mode'"));
+      ChargeTimer=ChargeTimerCharge;
+     ChangeCharge (1);
+   } else {
+     if (Debug >= 0) Serial.println(F("Voltage on boot is normal. Switching to 'Recharge Mode'"));
+     ChargeTimer=ChargeTimerRecharge;
+     ChangeCharge (0);
+   }
   }
   if (Debug >= 2) delay(delaytimer);
 
@@ -192,8 +197,7 @@ void setup() {
 }
 
 void Everysecond () {
-  Vin=analogRead(pinIV);//Checking input voltage
-  if (Vin>512) { //If input voltage present
+  if (InputV) { //If input voltage present
     if (Debug >=1) Serial.println(F("ES:Input Voltage present"));
 
     if (Charge) { //And if charging check -- is it time to stop?
@@ -223,15 +227,14 @@ void Everysecond () {
     
     if (Debug >=1) Serial.println(F("ES:No Input Voltage present"));
   }
+      BatV=ReadBatV(); //Check battery voltage
 }
 
 
 void loop() {
-  Vin=analogRead(pinIV); //Check input voltage
-  if (Debug >=2) {Serial.print(F("INPUT Voltage is: "));Serial.println(Vin);delay(delaytimer);}
-  
-  if (Vin<512) {//If no voltage present,disconnect charging MOSFET and connect load
-    if (Debug >=0) Serial.println(F("Switching to battery"));
+  ChangeVin();
+  if (!InputV) {//If no voltage present,disconnect charging MOSFET and connect load
+//    if (Debug >=0) Serial.println(F("Switching to battery"));
     if (Charge) {
       if (Debug >=2) {Serial.print(F("ES:Charge is: "));Serial.println(Charge);delay(delaytimer);}
       ChangeCharge(0);
@@ -239,12 +242,11 @@ void loop() {
       if (Debug >=2) delay(delaytimer);
     }
 
-    BatV=ReadBatV(); //Check battery voltage
     if (BatV<=VBatMin) {//If too low disconnect load MOSFET
       if ((!Charge)&&(Load)) {
           if (Debug >=0) Serial.println(F("NO INPUT. BATTERY VOLTAGE TOO LOW. SHUTTING DOWN!"));
           ChangeLoad(0);
-          delay(100500);
+          delay(10500);
         }
         else if ((Charge)&&(Load)) 
         {//If charging and Battery voltage too low -- show error
