@@ -32,7 +32,7 @@ const float VBatMax = 13.5; //Battery Maximum Voltage
 const bool UseCurrentSensor = true; //Use or not Current sensor, connected to pinBC (A2 default)
 const float R1 = 30000; // 33K Resistor at Battery Voltage resistor dividor
 const float R2 = 10000; // 10K Resistor at Battery Voltage resistor dividor
-const float CurrentDiff = 5.0;
+const float CurrentDiff = 10.0;
 
 const long ChargeTimerCharge = 10; //How long to charge. Default is 18000
 const long ChargeTimerRecharge = 30; //How often to recharge when on standby. Default is 86400
@@ -172,13 +172,15 @@ void setup() {
   pinMode(pinBatLed, OUTPUT);
   pinMode(pinVinLed, OUTPUT);
 
-  ChangeLoad(1);
   Load=1;
+  ChangeLoad(1);
 
+  delay(100);
+  Vcc = readVcc();
   ChangeVin();
   BatV = ReadBatV();
-  Vcc = readVcc();
   
+
   if (Debug >= 0) {Serial.print(F("Battery Voltage is "));Serial.println(BatV);}
   if (InputV)
   {
@@ -212,7 +214,7 @@ void Everysecond () {
       if (!UseCurrentSensor) { //If no current sensor then use timer
         ChargeTimer--;
         if (ChargeTimer<=0) {
-          if (Debug >=0) { Serial.print(F("ES:Charging process is over. Recharging in: "));Serial.println(ChargeTimerRecharge);}
+          if (Debug >=0) { Serial.print(F("Charging process is over. Recharging in: "));Serial.println(ChargeTimerRecharge);}
           ChangeCharge(0);
           ChargeTimer=ChargeTimerRecharge;
         }
@@ -237,7 +239,7 @@ void Everysecond () {
       if (Debug >=1) {Serial.print(F("ES:Timer is: "));Serial.println(ChargeTimer);}
       ChargeTimer--;
       if (ChargeTimer<=0){ //Test if time to recharge is come
-        if (Debug >=0) { Serial.print(F("ES:Charging process is over. Recharging in: "));Serial.println(ChargeTimerCharge);}
+        if (Debug >=0) { Serial.print(F("Time to recharge "));Serial.println(ChargeTimerCharge);}
         ChangeCharge(1);
         ChargeTimer=ChargeTimerCharge;
       }
@@ -255,12 +257,11 @@ void loop() {
   ChangeVin();
   if (!InputV) {//If no voltage present,disconnect charging MOSFET and connect load
 //    if (Debug >=0) Serial.println(F("Switching to battery"));
-    if (Charge) {
-      if (Debug >=2) {Serial.print(F("ES:Charge is: "));Serial.println(Charge);delay(delaytimer);}
+    if (Charge) if (Debug >=2) {Serial.print(F("ES:Charge is: "));Serial.println(Charge);delay(delaytimer);}
       ChangeCharge(0);
       ChargeTimer=ChargeTimerCharge;
       if (Debug >=2) delay(delaytimer);
-    }
+    
 
     if (BatV<=VBatMin) {//If too low disconnect load MOSFET
       if ((!Charge)&&(Load)) {
