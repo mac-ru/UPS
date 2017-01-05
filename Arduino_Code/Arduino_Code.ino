@@ -9,10 +9,10 @@ const int pinIV = A0; // Input Voltage pin
 const int pinBV = A1; // Battery Voltage pin
 const int pinBC = A2; // Battery Current pin
 
-const int pinBat = 1; //pin to Battery MOSFET
-const int pinLoad = 2; //pin to Load MOSFET
-const int pinBatLed = 3; //pin to Battery charging Led
-const int pinVinLed = 4; //pin to Input is present Led
+const int pinBat = 2; //pin to Battery MOSFET
+const int pinLoad = 3; //pin to Load MOSFET
+const int pinBatLed = 4; //pin to Battery charging Led
+const int pinVinLed = 5; //pin to Input is present Led
 //const int pinVinLed = 5; //pin to Error Led
 
 int Debug = 0; //Debug output level.
@@ -27,11 +27,12 @@ volatile long ChargeTimer = 0;
 
 //Constants MUST BE EDITED!!!!!!!!!
 const float Vbg = 1.1160895646; //Reference voltage. Read http://tim4dev.com/arduino-secret-true-voltmeter/
-const float VBatMin = 4.0; //Battery Minimum Voltage
-const float VBatMax = 4.6; //Battery Maximum Voltage
-const bool UseCurrentSensor = false; //Use or not Current sensor, connected to pinBC (A2 default)
-const float R1 = 0000; // 33K Resistor at Battery Voltage resistor dividor
+const float VBatMin = 11.0; //Battery Minimum Voltage
+const float VBatMax = 13.5; //Battery Maximum Voltage
+const bool UseCurrentSensor = true; //Use or not Current sensor, connected to pinBC (A2 default)
+const float R1 = 30000; // 33K Resistor at Battery Voltage resistor dividor
 const float R2 = 10000; // 10K Resistor at Battery Voltage resistor dividor
+const float CurrentDiff = 5.0;
 
 const long ChargeTimerCharge = 10; //How long to charge. Default is 18000
 const long ChargeTimerRecharge = 30; //How often to recharge when on standby. Default is 86400
@@ -166,6 +167,8 @@ void setup() {
   pinMode(pinBV, INPUT);
   pinMode(pinBC, INPUT);
 
+  pinMode(pinBat, OUTPUT);
+  pinMode(pinLoad, OUTPUT);
   pinMode(pinBatLed, OUTPUT);
   pinMode(pinVinLed, OUTPUT);
 
@@ -197,6 +200,9 @@ void setup() {
 }
 
 void Everysecond () {
+  int i;
+  int z = 5;
+  float cur = 0.0;
   if (InputV) { //If input voltage present
     if (Debug >=1) Serial.println(F("ES:Input Voltage present"));
 
@@ -212,6 +218,19 @@ void Everysecond () {
         }
       } else {
         //FIXME: Write code with current sensor
+        cur = 0;
+        for (i=1;i<=z;i++) {
+          cur=cur+analogRead(pinBC);
+          delay(1);
+        }
+        cur=cur/z;
+        if (Debug >=1) {Serial.print(F("ES:Current is: "));Serial.println(cur);}
+        if (abs(cur-512)<CurrentDiff){
+          if (Debug >=0) { Serial.print(F("ES:Charging process is over. Recharging in: "));Serial.println(ChargeTimerRecharge);}
+          ChangeCharge(0);
+          ChargeTimer=ChargeTimerRecharge;
+        }
+        
       }
     } else { //If not charging check if it is time to recharge
       if (Debug >=1) Serial.println(F("ES:Currently status: Not charging"));
@@ -232,6 +251,7 @@ void Everysecond () {
 
 
 void loop() {
+  //FIXME: ADD manual charging button
   ChangeVin();
   if (!InputV) {//If no voltage present,disconnect charging MOSFET and connect load
 //    if (Debug >=0) Serial.println(F("Switching to battery"));
