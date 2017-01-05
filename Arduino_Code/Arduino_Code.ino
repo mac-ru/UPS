@@ -15,7 +15,7 @@ const int pinBatLed = 4; //pin to Battery charging Led
 const int pinVinLed = 5; //pin to Input is present Led
 //const int pinVinLed = 5; //pin to Error Led
 
-int Debug = 0; //Debug output level.
+int Debug = 2; //Debug output level.
 //Debug 0 -- print only system critical information
 //Debug 1 -- print everysecond information
 //Debug 2 -- print all information and enable delay
@@ -73,11 +73,7 @@ float readVcc() { //Read VCC voltage, Comparing to 1.1 Internal.
   }
 
   result = result / MTimes;
-  if (Debug >= 2) {
-    Serial.print("VCC Voltage is: ");
-    Serial.println(result);
-    delay(delaytimer);
-  }
+  if (Debug >= 2) {Serial.print("VCC Voltage is: "); Serial.println(result); delay(delaytimer);}
   return result;
 }
 
@@ -96,11 +92,7 @@ float ReadBatV() {//Battery voltage test
   float v  = (tempBatV * Vcc) / 1024.0;
   float v2 = v / (R2 / (R1 + R2));
 
-  if (Debug >= 1) {
-    Serial.print("ReadBatV.out.Battery Voltage is: ");
-    Serial.println(v2);
-    delay(delaytimer);
-  }
+  if (Debug >= 1) {Serial.print("ReadBatV.out.Battery Voltage is: ");Serial.println(v2);delay(delaytimer);}
   return v2;
 }
 
@@ -129,7 +121,6 @@ void ChangeVin() { //Enable or disable input voltage present
   if (((!InputV)&&(Vin>=VinTrigger))||((InputV)&&(Vin<VinTrigger))) //If Voltage status change
   {
     if (Vin >=VinTrigger) {
-      if (Debug >= 2) {Serial.print(F("ChangeVin.Vin is: "));Serial.println(Vin);delay(delaytimer);}
       InputV=true;
       if (Debug >= 0) Serial.println(F("Input voltage normal! "));
       digitalWrite(pinVinLed,HIGH);
