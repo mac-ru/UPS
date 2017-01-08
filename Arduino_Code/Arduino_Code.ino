@@ -15,7 +15,7 @@ const int pinBatLed = 4; //pin to Battery charging Led
 const int pinVinLed = 5; //pin to Input is present Led
 //const int pinVinLed = 5; //pin to Error Led
 
-int Debug = -1; //Debug output level.
+int Debug = 1; //Debug output level.
 //Debug 0 -- print only system critical information
 //Debug 1 -- print table
 //Debug 2 -- Be verbose
@@ -30,16 +30,17 @@ volatile long ChargeTimer = 0;
 
 //Constants MUST BE EDITED for your system!!!!!!!!!
 const float Vbg = 1.1160895646; //Reference voltage. Read http://tim4dev.com/arduino-secret-true-voltmeter/
-const float VBatMin = 11.0; //Battery Minimum Voltage -- System will shutdown at this voltage
+const float VBatMin = 11.2; //Battery Minimum Voltage -- System will shutdown at this voltage
+const float VBatDiff = 0.5; //Difference in voltage to start Load
 const float VBatMax = 13.5; //Battery Maximum Voltage -- battery charge will stop if this voltage will stay more than this at ChargeTimerCooldown cycles
-const bool UseCurrentSensor = false; //Use or not Current sensor, connected to pinBC (A2 default)
-const float R1 = 29900; // 33K Resistor at Battery Voltage resistor dividor
+const bool UseCurrentSensor = true; //Use or not Current sensor, connected to pinBC (A2 default)
+const float R1 = 30050; // 33K Resistor at Battery Voltage resistor dividor
 const float R2 = 10000; // 10K Resistor at Battery Voltage resistor dividor
-const float CurrentDiff = 10.0;
+const float CurrentDiff = 5.0;
 
-const long constChargeTimerCharge = 10; //How long to charge. Default is 60
+const long constChargeTimerCharge = 60; //How long to charge. Default is 60
 const long constChargeTimerCooldown = 10; //How long to Cooldown battery. Default is 10
-const long constChargeTimerRecharge = 10; //How often to recharge when on standby. Default is 86400 seconds (1 day)
+const long constChargeTimerRecharge = 1000; //How often to recharge when on standby. Default is 86400 seconds (1 day)
 const long EverySecondTime = 5000000; //How often run Everysecond script in microseconds
 
 long ChargeTimerCharge = constChargeTimerCharge/(EverySecondTime/1000000);
@@ -53,6 +54,7 @@ float readVcc() { //Read VCC voltage, Comparing to 1.1 Internal.
   byte i;
   float result = 0.0;
   float tmp = 0.0;
+  delay(10);
 
   for (i = 0; i < MTimes; i++) {
     // Read 1.1V reference against AVcc
@@ -78,7 +80,6 @@ float readVcc() { //Read VCC voltage, Comparing to 1.1 Internal.
     tmp = (high << 8) | low;
     tmp = (Vbg * 1023.0) / tmp;
     result = result + tmp;
-    delay(5);
   }
 
   result = result / MTimes;
@@ -109,7 +110,7 @@ void ChangeCharge(int NewState) { //Enable or disable battery charging
   if (Debug >= 3) {Serial.print(F("ChangeCharge.NewState is: "));Serial.println(NewState);}
   switch (NewState) {
     case 0:
-      if (Debug >= 2) Serial.println(F("Battery charge is disabled "));
+      if (Debug >= 2) Serial.println(F("Battery charge is disabled"));
       Charge = false;
       Cooldown = false;
       digitalWrite(pinBat,LOW);
@@ -144,6 +145,7 @@ void ChangeVin() { //Enable or disable input voltage present
     if (Vin >=VinTrigger) {
       InputV=true;
       if (Debug >= 2) Serial.println(F("Input voltage normal! "));
+      if (!Load) Load = true;
       digitalWrite(pinVinLed,HIGH);
     } else {
       InputV=false;
@@ -186,10 +188,10 @@ void setup() {
   pinMode(pinBatLed, OUTPUT);
   pinMode(pinVinLed, OUTPUT);
 
-  if (Debug >= 4) {Serial.print(F("ChargeTimerCharge is "));Serial.println(ChargeTimerCharge);}
+/*  if (Debug >= 4) {Serial.print(F("ChargeTimerCharge is "));Serial.println(ChargeTimerCharge);}
   if (Debug >= 4) {Serial.print(F("ChargeTimerCooldown is "));Serial.println(ChargeTimerCooldown);}
   if (Debug >= 4) {Serial.print(F("ChargeTimerRecharge is "));Serial.println(ChargeTimerRecharge);}
-
+*/
   delay(10);
   ChangeCharge(0);
   ChangeLoad(1);
@@ -197,6 +199,7 @@ void setup() {
   delay(100);
   Vcc = readVcc();
   ChangeVin();
+  delay(5);
   BatV = ReadBatV();
   
 
@@ -224,16 +227,26 @@ void setup() {
 void printtable() { //Function to print table
   //INPUTV:TRUE(1023) MODE:charging; BATTERYVOLTAGE:11.5; OUTPUT;
   Serial.print(F("InputV: "));
-  if (InputV) Serial.print(F("True")); else Serial.print(F("   False"));
+  if (InputV) Serial.print(F("True")); else Serial.print(F("False"));
   Serial.print(F("("));
   Serial.print(Vin);
   Serial.print(F(")  Mode:"));
   if ((Charge)&&  (Cooldown)) Serial.print(F("Cooldown;"));;
   if ((Charge)&& (!Cooldown)) Serial.print(F("Charging;"));;
   if ((!Charge)&&(!Cooldown)) Serial.print(F("Waiting ;"));;
-  Serial.print(F(" Battery Voltage: "));
+  Serial.print(F(" VCC: "));
+  Serial.print(Vcc);
+  Serial.print(F(" BattV: "));
   if (BatV<10) Serial.print(F(" "));
   Serial.print(BatV);
+  Serial.print(F("; Timer: "));
+  Serial.print(ChargeTimer);
+  if (UseCurrentSensor) {
+    float cur;
+    Serial.print(F("; Current: "));
+    cur=analogRead(pinBC);
+    Serial.print(cur);
+  }
   Serial.print(F("; Output is: "));
   if (Load)  Serial.print(F("Connected   "));
   if (!Load) Serial.print(F("Disconnected"));
@@ -251,6 +264,7 @@ void Everysecond () { //This function check Everyperiod is it time to charge
     if (Charge) { //And if charging check -- is it time to stop?
       if (Debug >= 3) Serial.println(F("ES:Currently status: Charging"));
       if (Debug >= 3) {Serial.print(F("ES:Timer is: "));Serial.println(ChargeTimer);}
+
       if (!UseCurrentSensor) { //If no current sensor then use timer
         ChargeTimer--;
         if (ChargeTimer<=0) {
@@ -261,7 +275,6 @@ void Everysecond () { //This function check Everyperiod is it time to charge
             ChargeTimer=ChargeTimerCooldown;
           } else {
             if (Debug >= 3) { Serial.println(F("ES:Cooldown time exceeded. Time to test battery voltage"));}
-            Vcc = readVcc(); //Check if battery voltage. If it more than VBatMax then stop charging. Else charge battery again.
             delay(10);
             BatV=ReadBatV(); 
             if (BatV>=VBatMax) {
@@ -275,7 +288,7 @@ void Everysecond () { //This function check Everyperiod is it time to charge
             }
           }
         }
-      } else {
+      } else { // Stop charging using Current Sensor
         cur = 0;
         for (i=1;i<=z;i++) {
           cur=cur+analogRead(pinBC);
@@ -296,6 +309,7 @@ void Everysecond () { //This function check Everyperiod is it time to charge
       ChargeTimer--;
       if (ChargeTimer<=0){ //Test if time to recharge is come
         Vcc = readVcc(); //Check if battery voltage. If it more than VBatMax then do nothing. Else charge battery again.
+        delay(5);
         BatV=ReadBatV(); 
         if (BatV<=VBatMax) {
           if (Debug >= 3) { Serial.print(F("ES:Charging process is over. Recharging in: "));Serial.println(ChargeTimerRecharge);}
@@ -312,7 +326,7 @@ void Everysecond () { //This function check Everyperiod is it time to charge
     
     if (Debug >= 3) Serial.println(F("ES:No Input Voltage present"));
   }
-    if (Debug >= 1) printtable();
+    if (Debug == 1) {Vcc = readVcc();delay(5);BatV=ReadBatV(); printtable();}
 }
 
 
@@ -320,26 +334,40 @@ void loop() {
   //FIXME: ADD manual charging button
   ChangeVin();
   if (!InputV) {//If no voltage present,disconnect charging MOSFET and connect load
-    if (Charge) if (Debug >= 4) {Serial.print(F("Charge is: "));Serial.println(Charge);}
-      ChangeCharge(0);
-      ChargeTimer=ChargeTimerCharge;
-      if (Debug >= 4) delay(delaytimer);
-    
-      if (BatV<=VBatMin) {//If too low voltage disconnect load MOSFET. I know, that BatV stored in memory
-        if ((!Charge)&&(Load)) {
-          if (Debug >= 0) Serial.println(F("No input. Battery voltage low. SHUTTING DOWN!"));
-          ChangeLoad(0);
-          delay(10500);
-          if (Debug >= 0) Serial.println(F("Still Alive? WTF? External power to me? Input voltage is normal? Oh, I will try to sort out this situation"));
-          ChangeVin();
-          if (InputV) {
-             if (Debug >= 0) Serial.println(F("You put me on big caparcitor? I will set output to online :)"));
-             ChangeLoad(0);
-          }
-          } else if ((Charge)&&(Load)) {//If charging and Battery voltage too low -- show error
-            if (Debug >= 0) {Serial.println(F("Battery Voltage Too low when charging enable o_O"));delay(delaytimer);}
-          }
+    if (Charge) {
+     if (Debug >= 4) {Serial.print(F("Charge is: "));Serial.println(Charge);}
+       ChangeCharge(0);
+     }
+     ChargeTimer=0;
+     if (Debug >= 4) delay(delaytimer);
+     BatV=ReadBatV(); 
+
+     if (BatV<=VBatMin) {//If too low voltage disconnect load MOSFET. I know, that BatV stored in memory
+       if ((!Charge)&&(Load)) {
+         if (Debug >= 0) Serial.println(F("No input. Battery voltage low. SHUTTING DOWN!"));
+         ChangeCharge(0);
+         ChangeLoad(0);
+         delay(10500);
+         if (Debug >= 0) Serial.println(F("Still Alive? WTF? External power to me? Input voltage is normal? Oh, I will try to sort out this situation"));
+         ChangeVin();
+         if (InputV) {
+            if (Debug >= 0) Serial.println(F("You put me on big caparcitor? I will set output to online :)"));
+            ChangeLoad(1);
+         } else {
+            if (Debug >= 0) Serial.println(F("External Power? Good Good. We will wait."));
+         }
+         
+         } else if ((Charge)&&(Load)) {//If charging and Battery voltage too low -- show error
+           if (Debug >= 0) {Serial.println(F("Battery Voltage Too low when charging enable o_O"));delay(delaytimer);}
+         }
+     } else {
+      if (!Load) {
+        if (BatV>VBatMin+VBatDiff) { 
+          if (Debug >= 4) Serial.println(F("Try to work from battery"));
+          ChangeLoad(1);
+        }
       }
+     }
   }
   if  (Debug >= 3) {Serial.print(F("Charge is: "));Serial.println(Charge);delay(delaytimer);}
   
