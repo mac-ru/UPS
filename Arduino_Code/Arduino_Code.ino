@@ -1,4 +1,5 @@
 #include <TimerOne.h>
+#include <avr/wdt.h>
 
 volatile float BatV; //Voltage to Battery
 volatile float Vcc; //Voltage to Arduino
@@ -40,8 +41,9 @@ const float CurrentDiff = 5.0;
 
 const long constChargeTimerCharge = 60; //How long to charge. Default is 60
 const long constChargeTimerCooldown = 10; //How long to Cooldown battery. Default is 10
-const long constChargeTimerRecharge = 1000; //How often to recharge when on standby. Default is 86400 seconds (1 day)
+const long constChargeTimerRecharge = 86400; //How often to recharge when on standby. Default is 86400 seconds (1 day)
 const long EverySecondTime = 5000000; //How often run Everysecond script in microseconds
+
 
 long ChargeTimerCharge = constChargeTimerCharge/(EverySecondTime/1000000);
 long ChargeTimerCooldown = constChargeTimerCooldown/(EverySecondTime/1000000);
@@ -135,7 +137,7 @@ void ChangeCharge(int NewState) { //Enable or disable battery charging
 }
 
 void ChangeVin() { //Enable or disable input voltage present
-  int VinTrigger = 900;
+  int VinTrigger = 800;
   if (Debug >= 3) {Serial.println(F("Executing ChangeVin "));delay(delaytimer);}
   delay(5);
   Vin=analogRead(pinIV); //Check input voltage
@@ -173,6 +175,7 @@ void ChangeLoad(int NewState) { //Enable or disable Load
 
 
 void setup() {
+  wdt_disable(); //disable watchdog timer
 
   float tmp;
   long Time;
@@ -222,6 +225,8 @@ void setup() {
   if (Debug >= 0) Serial.println(F("Let's work! "));
   Timer1.initialize(EverySecondTime); // Every second do checking script
   Timer1.attachInterrupt(Everysecond);
+  wdt_enable (WDTO_8S); // Set watchdog timer to 8 seconds.
+
 }
 
 void printtable() { //Function to print table
@@ -340,14 +345,18 @@ void loop() {
      }
      ChargeTimer=0;
      if (Debug >= 4) delay(delaytimer);
+     delay(5);
      BatV=ReadBatV(); 
-
+     delay(5);
+     if (Debug >= 4) Serial.println(BatV);
      if (BatV<=VBatMin) {//If too low voltage disconnect load MOSFET. I know, that BatV stored in memory
        if ((!Charge)&&(Load)) {
          if (Debug >= 0) Serial.println(F("No input. Battery voltage low. SHUTTING DOWN!"));
          ChangeCharge(0);
          ChangeLoad(0);
-         delay(10500);
+         wdt_reset();
+         delay(5000);
+         wdt_reset();
          if (Debug >= 0) Serial.println(F("Still Alive? WTF? External power to me? Input voltage is normal? Oh, I will try to sort out this situation"));
          ChangeVin();
          if (InputV) {
@@ -370,5 +379,5 @@ void loop() {
      }
   }
   if  (Debug >= 3) {Serial.print(F("Charge is: "));Serial.println(Charge);delay(delaytimer);}
-  
+  wdt_reset();
 }
